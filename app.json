@@ -1,0 +1,74 @@
+{
+  "name": "stira-kiro",
+  "version": "0.5.1",
+  "displayName": "Stira Stage",
+  "description": "Talk to your Kiro Crew agent in a pixel-art lab. The room shows what the agent is doing, long replies and diagrams drop onto a whiteboard, and the shelf opens your memory as books of chapters. UI in English and Japanese.",
+  "author": "Resolver-TNG",
+  "license": "Apache-2.0",
+  "minKiroCrewVersion": "0.11.0",
+  "highlights": [
+    "Chat with a character in a pixel-art lab; long replies, diagrams and mcwidgets go to the whiteboard",
+    "The shelf is your memory index: environment notes, work journal, notes, projects and conversations, one book at a time",
+    "Conversations become chapters: situation, decisions, outcome, lessons (up to 10 a day; edit, rewrite or turn off)",
+    "Kiro draws on related chapters and knowledge leaves, on the Stage and in ordinary chats",
+    "A forest outside the window grows with your memory; other sessions' work appears as drones in the room"
+  ],
+  "useCases": [
+    "Talk to Kiro in a good-looking chat screen while building up past decisions and experience as stories you can find again."
+  ],
+  "configuration": [
+    "Enable the app and Stira Stage appears in the sidebar. Automatic chapters are switched on and off from the forest's control panel."
+  ],
+  "iconPath": "assets/icon.png",
+  "heroImage": "assets/hero.png",
+  "heroImageDetail": "assets/hero-detail.png",
+  "screenshots": [
+    "assets/screenshots/stage.png"
+  ],
+  "platform": {
+    "os": [
+      "windows",
+      "macos",
+      "linux"
+    ]
+  },
+  "backend": {
+    "hooks": {
+      "on_startup": "backend.hooks:on_startup",
+      "routes": "backend.routes:register_routes",
+      "on_shutdown": "backend.hooks:on_shutdown"
+    }
+  },
+  "ui": {
+    "entry": "dist/index.mjs",
+    "pages": [
+      {
+        "route": "/apps/stira-kiro",
+        "label": "Stira Stage",
+        "icon": "Sparkles"
+      }
+    ]
+  },
+  "permissions": {
+    "api": [
+      "/api/apps/stira-kiro",
+      "/api/apps/stira-kiro/*",
+      "/api/chat",
+      "/api/chat/slots",
+      "/api/chat/slots/*"
+    ],
+    "spawn": true
+  },
+  "tags": [
+    "stage",
+    "chat",
+    "memory",
+    "pixel-art"
+  ],
+  "agents": [
+    "agents/stira-chapter-writer.json"
+  ],
+  "skills": [
+    "skills/stira-memory"
+  ]
+}

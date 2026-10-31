@@ -1,0 +1,7 @@
+﻿Stira-KIRO
+Copyright 2026 Resolver-TNG
+
+ui/stage/ is derived from StiraCore (https://github.com/Resolver-TNG/StiraCore), Apache-2.0.
+The Stage art under ui/stage/assets/ is CC BY 4.0 (third_party/StiraCore/LICENSE-ASSETS).
+three.js (ui/stage/vendor/three.stage.min.js) is MIT (third_party/three.LICENSE.txt).
+

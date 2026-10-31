@@ -1,0 +1,14 @@
+<!doctype html>
+<!-- Stira-KIRO フレーム解析用の台(tools/frames.mjs が開く)。
+     ダッシュボード無しで、Stage を本番と同じ DOM・CSS・素材で demo モードで動かす。 -->
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>Stira Stage harness</title>
+  <link rel="stylesheet" href="../../ui/stage/stage.css">
+  <link rel="stylesheet" href="../../ui/stage/stira-shell.css">
+  <style>html, body { margin: 0; height: 100%; background: #000; overflow: hidden; } #host { position: absolute; inset: 0; }</style>
+  <script type="module" src="harness.js"></script>
+</head>
+<body><div id="host"></div></body>
+</html>
