@@ -9,7 +9,7 @@ from aiohttp import web
 
 from kiro_crew.apps.route_registry import AppRoute
 
-from . import autosum, chapters, recall, shelf
+from . import autosum, chapters, narrative, recall, shelf
 
 NO_STORE = {"Cache-Control": "no-store"}
 
@@ -114,6 +114,17 @@ async def post_memory_relevant(request: web.Request, _ctx: Any) -> web.Response:
     return web.json_response({"hits": hits, "context": recall.relevant_context(hits)}, headers=NO_STORE)
 
 
+async def get_narratives(_request: web.Request, _ctx: Any) -> web.Response:
+    items = await asyncio.to_thread(narrative.build_all)
+    slim = [{k: n[k] for k in ("id", "name", "kind", "chapters", "updatedAt", "text")} for n in items]
+    return web.json_response({"books": slim}, headers=NO_STORE)
+
+
+async def get_promotions(_request: web.Request, _ctx: Any) -> web.Response:
+    items = await asyncio.to_thread(narrative.promotions)
+    return web.json_response({"candidates": items}, headers=NO_STORE)
+
+
 def register_routes(_ctx: Any) -> list[AppRoute]:
     return [
         AppRoute(method="GET", path="/health", handler=get_health),
@@ -123,6 +134,8 @@ def register_routes(_ctx: Any) -> list[AppRoute]:
         AppRoute(method="POST", path="/chapters/settings", handler=post_chapters_settings),
         AppRoute(method="GET", path="/memory/brief", handler=get_memory_brief),
         AppRoute(method="POST", path="/memory/relevant", handler=post_memory_relevant),
+        AppRoute(method="GET", path="/memory/narratives", handler=get_narratives),
+        AppRoute(method="GET", path="/memory/promotions", handler=get_promotions),
         AppRoute(method="GET", path="/chapters/{stem}", handler=get_chapter),
         AppRoute(method="PUT", path="/chapters/{stem}", handler=put_chapter),
         AppRoute(method="DELETE", path="/chapters/{stem}", handler=delete_chapter),

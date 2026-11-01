@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from . import autosum, recall
+from . import autosum, narrative, recall
 
 
 async def on_startup(ctx: Any) -> None:
@@ -17,6 +17,10 @@ async def on_startup(ctx: Any) -> None:
         await asyncio.to_thread(recall.write_index)  # 普段のチャット用の目次(skills/stira-memory)
     except Exception:  # noqa: BLE001
         ctx.health.mark_degraded("記憶の目次(INDEX.md)を書けませんでした")
+    try:
+        await asyncio.to_thread(narrative.write_all)  # 物語の現在地(kiro-pack の hook が読む)
+    except Exception:  # noqa: BLE001
+        ctx.health.mark_degraded("物語の現在地(narratives/)を書けませんでした")
 
 
 async def on_shutdown(ctx: Any) -> None:

@@ -37,10 +37,16 @@ async def refresh_index() -> None:
     """章が変わったら、普段のチャット用の目次(INDEX.md)を書き直す。失敗しても止めない。"""
     from . import recall
 
+    from . import narrative
+
     try:
         await asyncio.to_thread(recall.write_index)
     except Exception:  # noqa: BLE001
         log.warning("INDEX.md refresh failed", exc_info=True)
+    try:  # 物語の現在地と昇格候補も同じ時に作り直す(モデルは呼ばない)
+        await asyncio.to_thread(narrative.write_all)
+    except Exception:  # noqa: BLE001
+        log.warning("narrative refresh failed", exc_info=True)
 
 
 class Summarizer:

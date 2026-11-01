@@ -9,7 +9,7 @@ and for keeping what you did as a story you can find again. The lab is the home 
 to the character in a text window, open memory books on the shelf, and watch a forest of memories
 grow outside the window.
 
-Status: v0.5.1, in development. Requires Kiro Crew 0.11 or later. UI in English and Japanese
+Status: v0.6.0, in development. Requires Kiro Crew 0.11 or later. UI in English and Japanese
 (follows the dashboard's language).
 
 ## What it does
@@ -19,6 +19,11 @@ Status: v0.5.1, in development. Requires Kiro Crew 0.11 or later. UI in English 
 - **Chapters (story memory)**: conversations are summarized as "situation → decisions → outcome → lessons" plus knowledge leaves. Runs inside the app (up to 10 chapters a day); you can edit, rewrite or drop a chapter.
 - **Using memory**: on the Stage, each message carries the related chapters and leaves. In ordinary chats, the `stira-memory` skill points Kiro at the index (`INDEX.md`).
 - **The room reacts**: turns, tools, memory events and other sessions' work move the character and the props.
+- **Narratives**: from the chapters, each book gets a short "where this stands" (latest outcome, the arc so far, recent decisions, lessons). Built by plain rules with no model call, refreshed whenever chapters change. Lessons that recur in two or more chapters become promotion candidates for you to turn into lessons or steering.
+
+## Which Stira?
+- **Stira Forest** ([Resolver-TNG/Stira-Forest-KiroCrew](https://github.com/Resolver-TNG/Stira-Forest-KiroCrew)): for Kiro Crew as it ships. Install, enable, set each crew's core mission, and its knowledge grows as a tree. No steering or hooks to edit.
+- **Stira Stage** (this repo): for people who customize Kiro Crew. On top of the app, the optional [`kiro-pack/`](kiro-pack/README.md) adds the three-layer memory control: the core (steering, every session) → the narrative (a hook attaches the one related book's narrative to a message) → episodes (chapters, opened on demand). The narrative never outranks the core.
 
 ## Install
 This repository is its own registry (`app-registry.json` at the root). Add this to `registries`
@@ -40,7 +45,7 @@ Or clone it and run `kirocrew app install <folder>`.
 - The app adds no approval gates of its own. Tool approvals follow your Kiro Crew settings.
 
 ## Development
-- Tests: `node --test tests/kc_core.test.mjs` and `<python bundled with Kiro Crew> tests/test_chapters.py`
+- Tests: `node --test tests/kc_core.test.mjs` and `<python bundled with Kiro Crew> -m pytest -q tests`
 - Dev mode: install with `python -m kiro_crew app dev` (Kiro Crew's bundled python), then make the installed app's `ui` folder a junction (symlink) to this repo's `ui`. UI changes then apply on reload. Changes to the backend, skills, agents or `app.json` need "Sync" in the Library.
 - Re-import the Stage: `node tools/sync_stage.mjs` (copies StiraCore's Stage and applies the patches; fails loudly when one no longer matches).
 - Motion analysis: `node tools/frames.mjs --state <state>` → `uv run --with pillow tools/analyze_frames.py <folder>`

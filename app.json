@@ -1,6 +1,6 @@
 {
   "name": "stira-kiro",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "displayName": "Stira Stage",
   "description": "Talk to your Kiro Crew agent in a pixel-art lab. The room shows what the agent is doing, long replies and diagrams drop onto a whiteboard, and the shelf opens your memory as books of chapters. UI in English and Japanese.",
   "author": "Resolver-TNG",
@@ -11,7 +11,8 @@
     "The shelf is your memory index: environment notes, work journal, notes, projects and conversations, one book at a time",
     "Conversations become chapters: situation, decisions, outcome, lessons (up to 10 a day; edit, rewrite or turn off)",
     "Kiro draws on related chapters and knowledge leaves, on the Stage and in ordinary chats",
-    "A forest outside the window grows with your memory; other sessions' work appears as drones in the room"
+    "A forest outside the window grows with your memory; other sessions' work appears as drones in the room",
+    "Each book gets an automatic narrative of where it stands; the optional kiro-pack attaches it to related messages in ordinary chats"
   ],
   "useCases": [
     "Talk to Kiro in a good-looking chat screen while building up past decisions and experience as stories you can find again."
