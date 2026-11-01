@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .sanitize import clean_field
 from .shelf import PRIVATE_MODES, crew_home, redact
 
 CHUNK_CHARS = 20000
@@ -315,11 +316,11 @@ def parse_chapter(text: str) -> dict[str, Any] | None:
     for line in sec.get("葉", "").splitlines():
         lm = _LEAF.match(line.strip())
         if lm:
-            leaves.append({"kind": lm.group(1).strip(), "title": redact(lm.group(2).strip()), "text": redact(lm.group(3).strip())[:300]})
+            leaves.append({"kind": clean_field(lm.group(1)), "title": clean_field(lm.group(2)), "text": clean_field(lm.group(3))[:300]})
     return {
         "session": meta.get("session", ""),
         "part": int(meta.get("part", "1") or 1),
-        "title": redact(meta.get("title", ""))[:120],
+        "title": clean_field(meta.get("title", ""))[:120],
         "period": meta.get("period", ""),
         **{k: redact(sec.get(k, "").strip())[:1200] for k in SECTIONS},
         "leaves": leaves[:6],

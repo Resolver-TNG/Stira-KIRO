@@ -29,21 +29,9 @@ EXCERPT = 180
 OTHER = "(no project)"
 SKIP_DIRS = {"memory", "notes", "knowledge", "exports", "_src", ".kiro", "node_modules"}
 
-# credential-shaped text never reaches the board
-_SECRET = re.compile(
-    r"(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|"
-    r"sk-[A-Za-z0-9_-]{20,}|xox[abpr]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|"
-    r"AIza[0-9A-Za-z_-]{35}|glpat-[A-Za-z0-9_-]{20,}|ASIA[0-9A-Z]{16}|"
-    r"eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|"
-    r"hooks\.slack\.com/services/[A-Za-z0-9/]+|[a-z][a-z0-9+.-]*://[^\s/:@]+:[^\s/@]+@|"
-    r"sk_(?:live|test)_[A-Za-z0-9]{16,}|hf_[A-Za-z0-9]{20,}|npm_[A-Za-z0-9]{20,}|"
-    r"(?i:bearer\s+[A-Za-z0-9._~+/=-]{12,})|(?i:aws_secret_access_key\s*[:=]\s*\S{20,})|"
-    r"(?i:(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*\S{4,}))"
-)
-
-
-def redact(text: str) -> str:
-    return _SECRET.sub("[redacted]", text)
+# credential-shaped text never reaches the board. The patterns live in backend/sanitize.py,
+# shared with Stira Forest (tools/sync_shared.py keeps the copies identical).
+from .sanitize import redact  # noqa: E402,F401
 
 
 def crew_home() -> Path:
