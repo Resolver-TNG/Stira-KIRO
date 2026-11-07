@@ -9,15 +9,19 @@ const lang = params.get('lang') === 'en' ? 'en' : 'ja';
 const base = new URL('../../ui/stage/', import.meta.url).href;
 const fixtureUrl = new URL('fixtures/repos.json', import.meta.url);
 const fixture = await fetch(fixtureUrl).then((response) => response.json());
+const dashboardBot = params.get('bot') || '';
+const dashboardStatus = Number(params.get('botStatus') || 200);
+const sent = [];
 let payload = structuredClone(fixture);
 let config = {
   scanRoots: ['C:\\example\\projects', 'C:\\example\\labs'],
   paths: ['C:\\example\\listed-tooling'],
   scanDepth: 1,
+  dashboardBot,
 };
 if (params.get('empty') === '1') {
   payload = { ...payload, repositories: [] };
-  config = { scanRoots: [], paths: [], scanDepth: 1 };
+  config = { scanRoots: [], paths: [], scanDepth: 1, dashboardBot };
 }
 if (params.get('problem') === '1') {
   config = { ...config, paths: [...config.paths, 'C:\\example\\missing-repository'] };
@@ -45,6 +49,23 @@ const jsonResponse = (body, status = 200) => new Response(JSON.stringify(body), 
 
 async function apiFetch(url, init = {}) {
   const target = new URL(url, location.href);
+  const member = target.pathname.match(/^\/api\/member-records\/([^/]+)$/);
+  if (member && init.method === 'POST') {
+    let submitted = {};
+    try { submitted = JSON.parse(init.body); } catch { return jsonResponse({ error: 'json body required' }, 400); }
+    sent.push(submitted);
+    root.dataset.sent = JSON.stringify(sent);
+    const codes = {
+      403: 'app_token_required',
+      404: 'member_not_found',
+      409: 'crew_log_unavailable',
+      429: 'quota_exceeded',
+      503: 'crew_log_off',
+    };
+    return dashboardStatus === 200
+      ? jsonResponse({ ok: true, recorded: { type: 'stira_kiro__desk', member: decodeURIComponent(member[1]) } })
+      : jsonResponse({ error: 'fake member record refusal', code: codes[dashboardStatus] || 'fake_error' }, dashboardStatus);
+  }
   if (target.pathname.endsWith('/api/apps/stira-kiro/repos/config') && (!init.method || init.method === 'GET')) {
     return jsonResponse(config);
   }
@@ -67,6 +88,7 @@ async function apiFetch(url, init = {}) {
       scanRoots: [...submitted.scanRoots],
       paths: [...submitted.paths],
       scanDepth: 1,
+      dashboardBot: typeof submitted.dashboardBot === 'string' ? submitted.dashboardBot : '',
     };
     return jsonResponse({ config, found: payload.repositories.length });
   }
@@ -121,7 +143,7 @@ try {
 } catch {
   /* storage refused */
 }
-window.__stira = { root };
+window.__stira = { root, sent };
 await import(`${base}js/main.js`);
 
 const waitForStage = async () => {
@@ -175,4 +197,4 @@ if (['picker', 'settings'].includes(params.get('open'))) {
   root.stiraBoard.show({ key: 'desk-overview-preview', text, c: classify(text) }, { explicit: true });
 }
 root.dataset.harnessReady = '1';
-window.__stira = { root, deskStatus, payload: () => payload };
+window.__stira = { root, deskStatus, payload: () => payload, sent };

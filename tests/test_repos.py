@@ -297,8 +297,8 @@ def test_cache_reuses_all_facts_then_refreshes_only_status(tmp_path: Path):
 
 
 def test_config_defaults_roundtrip_and_validation(tmp_path: Path):
-    assert repos.read_config(tmp_path) == {"paths": [], "scanRoots": [], "scanDepth": 1}
-    value = {"paths": ["X:/repo"], "scanRoots": ["X:/root"], "scanDepth": 1}
+    assert repos.read_config(tmp_path) == {"paths": [], "scanRoots": [], "scanDepth": 1, "dashboardBot": ""}
+    value = {"paths": ["X:/repo"], "scanRoots": ["X:/root"], "scanDepth": 1, "dashboardBot": "desk-bot_1"}
     assert repos.write_config(value, tmp_path) == value
     assert repos.read_config(tmp_path) == value
     for bad in (
@@ -353,7 +353,7 @@ def test_branches_fall_back_to_local_default_without_remote(tmp_path: Path):
 
 
 def repo_config(*paths: Path) -> dict[str, object]:
-    return {"paths": [str(path) for path in paths], "scanRoots": [], "scanDepth": 1}
+    return {"paths": [str(path) for path in paths], "scanRoots": [], "scanDepth": 1, "dashboardBot": ""}
 
 
 def test_fetch_rejects_id_outside_current_discovery(tmp_path: Path):
@@ -500,8 +500,13 @@ def test_fetch_failure_redacts_credentials_and_returns_fresh_payload(tmp_path: P
 
 
 
-def checked_config(*, paths=(), scan_roots=()):
-    return {"paths": list(paths), "scanRoots": list(scan_roots), "scanDepth": 1}
+def checked_config(*, paths=(), scan_roots=(), dashboard_bot=""):
+    return {
+        "paths": list(paths),
+        "scanRoots": list(scan_roots),
+        "scanDepth": 1,
+        "dashboardBot": dashboard_bot,
+    }
 
 
 def test_config_paths_trim_copy_quotes_and_expand_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -615,4 +620,45 @@ def test_save_config_rejection_does_not_replace_existing_file(tmp_path: Path):
         repos.save_config(checked_config(paths=[str(tmp_path / "missing")]), home)
 
     assert caught.value.problems[0]["reason"] == "path does not exist"
+    assert repos.read_config(home) == existing
+
+
+
+@pytest.mark.parametrize("slug", ["desk-bot", "desk_bot_1", "a", "bot-2026_stage"])
+def test_dashboard_bot_accepts_valid_slug(slug: str):
+    config, problems = repos.inspect_config_paths(checked_config(dashboard_bot=slug))
+    assert problems == []
+    assert config["dashboardBot"] == slug
+    assert repos.validate_config(config)["dashboardBot"] == slug
+
+
+def test_dashboard_bot_accepts_empty_and_roundtrips(tmp_path: Path):
+    value = checked_config(dashboard_bot="")
+    assert repos.write_config(value, tmp_path) == value
+    assert repos.read_config(tmp_path) == value
+
+
+@pytest.mark.parametrize(
+    ("slug", "reason"),
+    [
+        ("Desk-Bot", "dashboardBot must contain only lowercase letters, digits, hyphens, and underscores"),
+        ("desk.bot", "dashboardBot must contain only lowercase letters, digits, hyphens, and underscores"),
+        ("a" * 65, "dashboardBot must be at most 64 characters"),
+        (123, "dashboardBot must be a string"),
+    ],
+)
+def test_dashboard_bot_rejections_are_setting_problems(slug, reason: str):
+    config, problems = repos.inspect_config_paths(checked_config(dashboard_bot=slug))
+    assert config["dashboardBot"] == ""
+    assert problems == [{"field": "dashboardBot", "index": 0, "reason": reason}]
+    with pytest.raises(repos.ConfigError, match=reason):
+        repos.validate_config(checked_config(dashboard_bot=slug))
+
+
+def test_save_config_rejects_bad_dashboard_bot_without_writing(tmp_path: Path):
+    home = tmp_path / "home"
+    existing = repos.write_config(checked_config(dashboard_bot="desk-bot"), home)
+    with pytest.raises(repos.ConfigPathError) as caught:
+        repos.save_config(checked_config(dashboard_bot="Desk Bot"), home)
+    assert caught.value.problems[0]["field"] == "dashboardBot"
     assert repos.read_config(home) == existing

@@ -4,6 +4,8 @@ import { test } from 'node:test';
 
 import {
   deskConfigProblemMap,
+  deskDashboardRecord,
+  deskDashboardSendDecision,
   deskEmptyState,
   deskIssues,
   deskMarkdown,
@@ -336,5 +338,96 @@ test('every fixed folder-setting reason from the backend has a Japanese text', (
   for (const reason of new Set(fixed)) {
     const shown = deskConfigProblemMap([{ field: 'paths', index: 0, path: 'x', reason }], 'ja').get('paths:0');
     assert.notEqual(shown, reason, `no Japanese text for: ${reason}`);
+  }
+});
+
+
+
+test('deskDashboardRecord keeps counts, workbench order, limits, and no personal paths', () => {
+  const privatePath = 'C:\\Users\\someone\\secret\\repo';
+  const repositories = [
+    cleanRepo({ id: 'green', name: 'green-repo', path: privatePath }),
+    cleanRepo({ id: 'yellow', name: 'yellow-repo', status: 'yellow', changes: { total: 1 }, path: privatePath }),
+    cleanRepo({ id: 'red', name: 'red-repo', status: 'red', behind: 2, path: privatePath }),
+  ];
+  for (let index = 0; index < 9; index += 1) {
+    repositories.push(cleanRepo({
+      id: `extra-${index}`,
+      name: `extra-${String(index).padStart(2, '0')}`,
+      status: 'yellow',
+      changes: { total: 1 },
+      error: index === 0 ? 'あ'.repeat(180) : undefined,
+      path: `${privatePath}-${index}`,
+    }));
+  }
+  const payload = { generatedAt: '2026-11-07T01:02:03Z', repositories };
+  const listing = deskRepositoryRows(payload, 'ja');
+  const data = deskDashboardRecord(payload, 'ja');
+  assert.deepEqual({ red: data.red, yellow: data.yellow, green: data.green, total: data.total }, {
+    red: 2, yellow: 9, green: 1, total: 12,
+  });
+  assert.deepEqual(data.needs.map((item) => item.name), listing.actionable.slice(0, 8).map((row) => row.repo.name));
+  assert.equal(data.needs.length, 8);
+  assert.ok(data.needs.every((item) => ['!', '·'].includes(item.mark)));
+  assert.ok(data.needs.every((item) => Array.from(item.text).length <= 120));
+  assert.equal(data.clean, 1);
+  assert.equal(data.generatedAt, payload.generatedAt);
+  assert.doesNotMatch(JSON.stringify(data), /Users|secret|\\\\/);
+});
+
+
+test('deskDashboardRecord removes trailing needs until the data fits in 8 KiB', () => {
+  const repositories = Array.from({ length: 8 }, (_, index) => cleanRepo({
+    id: `large-${index}`,
+    name: `${index}-${'界'.repeat(3000)}`,
+    status: 'yellow',
+    changes: { total: 1 },
+  }));
+  const data = deskDashboardRecord({ generatedAt: '2026-11-07T01:02:03Z', repositories }, 'ja');
+  assert.ok(new TextEncoder().encode(JSON.stringify(data)).byteLength <= 8 * 1024);
+  assert.ok(data.needs.length < 8);
+});
+
+
+test('dashboard send decision skips identical data until five minutes after success', () => {
+  const data = { total: 1 };
+  const first = deskDashboardSendDecision(null, 'desk-bot', data, 0);
+  assert.equal(first.send, true);
+  const sent = { bot: first.bot, signature: first.signature, at: 1000, outcome: 'sent' };
+  assert.equal(deskDashboardSendDecision(sent, 'desk-bot', data, 1000 + 299999).send, false);
+  assert.equal(deskDashboardSendDecision(sent, 'desk-bot', data, 1000 + 300000).send, true);
+  assert.equal(deskDashboardSendDecision(sent, '', data, 1000 + 300000).send, false);
+});
+
+
+test('dashboard send decision does not retry the same failed data', () => {
+  const data = { total: 1 };
+  const first = deskDashboardSendDecision(null, 'desk-bot', data, 0);
+  const failed = { bot: first.bot, signature: first.signature, at: 0, outcome: 'failed' };
+  assert.equal(deskDashboardSendDecision(failed, 'desk-bot', data, 999999).send, false);
+  assert.equal(deskDashboardSendDecision(failed, 'desk-bot', { total: 2 }, 1).send, true);
+  assert.equal(deskDashboardSendDecision(failed, 'other-bot', data, 1).send, true);
+});
+
+
+test('dashboard send decision retries quota refusal only on the next five-minute cycle', () => {
+  const data = { total: 1 };
+  const first = deskDashboardSendDecision(null, 'desk-bot', data, 0);
+  const quota = { bot: first.bot, signature: first.signature, at: 1000, outcome: 'quota' };
+  assert.equal(deskDashboardSendDecision(quota, 'desk-bot', data, 1000 + 299999).send, false);
+  assert.equal(deskDashboardSendDecision(quota, 'desk-bot', { total: 2 }, 1000 + 299999).send, false);
+  assert.equal(deskDashboardSendDecision(quota, 'desk-bot', data, 1000 + 300000).send, true);
+});
+
+
+test('dashboardBot validation reasons have Japanese UI text', () => {
+  const reasons = [
+    'dashboardBot must be a string',
+    'dashboardBot must be at most 64 characters',
+    'dashboardBot must contain only lowercase letters, digits, hyphens, and underscores',
+  ];
+  for (const reason of reasons) {
+    const shown = deskConfigProblemMap([{ field: 'dashboardBot', index: 0, reason }], 'ja');
+    assert.notEqual(shown.get('dashboardBot:0'), reason);
   }
 });

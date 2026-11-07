@@ -560,6 +560,11 @@
   font-weight: normal;
   letter-spacing: 0.05em;
 }
+.stira-stage-root .kc-desk-config-note {
+  margin: 0;
+  color: var(--dim-ink);
+  font-size: clamp(9px, calc(var(--px) * 2.9), 11px);
+}
 .stira-stage-root .kc-desk-config-list {
   display: flex;
   flex-direction: column;
@@ -633,3 +638,17 @@
 }
 .stira-stage-root .kc-desk-config-save { color: #0b0a16; background: var(--neon); }
 .stira-stage-root .kc-desk-config-save:disabled { color: var(--dim-ink); background: var(--deep); cursor: wait; }
+
+
+.stira-stage-root .kc-desk-hint {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(var(--px) * 3);
+}
+.stira-stage-root .kc-desk-dashboard-warning {
+  color: var(--crit-fg);
+  text-align: right;
+}
+.stira-stage-root .kc-desk-dashboard-warning[hidden] { display: none; }
+.stira-stage-root .kc-desk-dashboard-input { width: 100%; }

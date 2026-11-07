@@ -1,6 +1,6 @@
 {
   "name": "stira-kiro",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "displayName": "Stira Stage",
   "description": "Talk to your Kiro Crew agent in a pixel-art lab. The room shows what the agent is doing, long replies and diagrams drop onto a whiteboard, and the shelf opens your memory as books of chapters. UI in English and Japanese.",
   "author": "Resolver-TNG",
@@ -56,7 +56,8 @@
       "/api/apps/stira-kiro/*",
       "/api/chat",
       "/api/chat/slots",
-      "/api/chat/slots/*"
+      "/api/chat/slots/*",
+      "/api/member-records/*"
     ],
     "spawn": true
   },

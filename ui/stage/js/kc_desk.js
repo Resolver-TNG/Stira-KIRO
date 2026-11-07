@@ -153,12 +153,15 @@ const CONFIG_REASON_JA = new Map([
   ['path is not a directory', 'ディレクトリではありません'],
   ['symbolic links and junctions are not allowed', 'シンボリックリンクとジャンクションは使えません'],
   ['path is not a Git repository (.git not found)', 'Git リポジトリではありません (.git が見つかりません)'],
+  ['dashboardBot must be a string', 'Bot の短い名前は文字列で指定してください'],
+  ['dashboardBot must be at most 64 characters', 'Bot の短い名前は 64 文字以内で指定してください'],
+  ['dashboardBot must contain only lowercase letters, digits, hyphens, and underscores', 'Bot の短い名前には英小文字、数字、-、_ だけを使えます'],
 ]);
 
 export function deskConfigProblemMap(problems, lang = 'en') {
   const mapped = new Map();
   for (const problem of Array.isArray(problems) ? problems : []) {
-    if (!problem || !['paths', 'scanRoots'].includes(problem.field) || !Number.isInteger(problem.index)) continue;
+    if (!problem || !['paths', 'scanRoots', 'dashboardBot'].includes(problem.field) || !Number.isInteger(problem.index)) continue;
     const reason = String(problem.reason || '');
     mapped.set(`${problem.field}:${problem.index}`, lang === 'ja' ? (CONFIG_REASON_JA.get(reason) || reason) : reason);
   }
@@ -405,6 +408,54 @@ export function deskRepositoryRows(payload, lang = 'ja') {
   return { actionable, clean };
 }
 
+const DASHBOARD_RECORD_MAX_BYTES = 8 * 1024;
+const DASHBOARD_NEEDS_LIMIT = 8;
+const DASHBOARD_TEXT_LIMIT = 120;
+
+function firstCharacters(value, limit) {
+  return Array.from(String(value ?? '')).slice(0, limit).join('');
+}
+
+function jsonBytes(value) {
+  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+}
+
+export function deskDashboardRecord(payload, lang = 'ja') {
+  const repositories = repositoriesOf(payload);
+  const counts = statusCounts(repositories);
+  const listing = deskRepositoryRows(payload, lang);
+  const data = {
+    red: counts.red,
+    yellow: counts.yellow,
+    green: counts.green,
+    total: repositories.length,
+    needs: listing.actionable.slice(0, DASHBOARD_NEEDS_LIMIT).map((row) => ({
+      name: String(row.repo && row.repo.name ? row.repo.name : ''),
+      mark: row.severity === 'red' ? '!' : '·',
+      text: firstCharacters(row.issues.map((issue) => issue.text).join(' / '), DASHBOARD_TEXT_LIMIT),
+    })),
+    clean: listing.clean.length,
+    generatedAt: payload && payload.generatedAt,
+  };
+  while (data.needs.length && jsonBytes(data) > DASHBOARD_RECORD_MAX_BYTES) data.needs.pop();
+  return data;
+}
+
+export function deskDashboardSendDecision(previous, dashboardBot, data, now, interval = DESK_POLL_MS) {
+  const bot = String(dashboardBot || '');
+  if (!bot) return { send: false, bot, signature: '' };
+  const signature = JSON.stringify(data);
+  const elapsed = previous ? Number(now) - Number(previous.at) : 0;
+  if (previous && previous.bot === bot && previous.outcome === 'quota' && elapsed < interval) {
+    return { send: false, bot, signature };
+  }
+  if (!previous || previous.bot !== bot || previous.signature !== signature) {
+    return { send: true, bot, signature };
+  }
+  const retryAfterInterval = previous.outcome === 'sent' || previous.outcome === 'quota';
+  return { send: retryAfterInterval && elapsed >= interval, bot, signature };
+}
+
 export function repoMarkdown(repo, lang = 'ja', allRepositories = []) {
   const ja = lang === 'ja';
   const out = [`# ${esc(repo && repo.name)}`];
@@ -516,6 +567,29 @@ function replaceRepository(payload, repository) {
   return { ...(payload || {}), repositories: next };
 }
 
+function dashboardFailureReason(status, code, lang) {
+  const ja = lang === 'ja';
+  const reasons = ja ? {
+    app_token_required: 'アプリのトークンがありません',
+    crew_panel_disabled: 'Bot のダッシュボードが無効です',
+    member_not_found: 'Bot が見つかりません',
+    ambiguous_slug: '同じ短い名前の Bot が複数あります',
+    crew_log_unavailable: 'Bot のチャットがまだ始まっていません',
+    crew_log_off: 'crew log が無効です',
+    quota_exceeded: '送信上限に達しました。次の周期で再試行します',
+  } : {
+    app_token_required: 'the app token is missing',
+    crew_panel_disabled: 'the Bot dashboard is disabled',
+    member_not_found: 'the Bot was not found',
+    ambiguous_slug: 'more than one Bot has that short name',
+    crew_log_unavailable: 'the Bot chat has not been started yet',
+    crew_log_off: 'the crew log is disabled',
+    quota_exceeded: 'the send quota was reached; the next cycle will retry',
+  };
+  if (code && reasons[code]) return reasons[code];
+  return ja ? `HTTP ${status}` : `HTTP ${status}`;
+}
+
 export function startDeskStatus({ root, stage, apiFetch, classify = null, lang = 'ja', onRepo = null }) {
   const notesRoot = el('div', 'kc-desk-notes');
   notesRoot.setAttribute('aria-label', lang === 'ja' ? 'リポジトリの付箋' : 'Repository notes');
@@ -526,6 +600,58 @@ export function startDeskStatus({ root, stage, apiFetch, classify = null, lang =
   let gradeTimer = null;
   let stopped = false;
   let inFlight = null;
+  let dashboardBot = '';
+  let dashboardAttempt = null;
+  let dashboardWarning = '';
+
+  const setDashboardWarning = (value) => {
+    dashboardWarning = value;
+    root.dispatchEvent(new CustomEvent('stira:desk-dashboard', { detail: { warning: value } }));
+  };
+
+  const sendDashboard = async (next) => {
+    const data = deskDashboardRecord(next, lang);
+    const now = Date.now();
+    const decision = deskDashboardSendDecision(dashboardAttempt, dashboardBot, data, now);
+    if (!dashboardBot) {
+      dashboardAttempt = null;
+      if (dashboardWarning) setDashboardWarning('');
+      return;
+    }
+    if (!decision.send) return;
+    if (!dashboardAttempt || dashboardAttempt.bot !== decision.bot || dashboardAttempt.signature !== decision.signature) {
+      if (dashboardWarning) setDashboardWarning('');
+    }
+    const attempt = { bot: decision.bot, signature: decision.signature, at: now, outcome: 'pending' };
+    dashboardAttempt = attempt;
+    try {
+      const response = await apiFetch(`/api/member-records/${encodeURIComponent(decision.bot)}`, {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'desk', data }),
+      });
+      let body = {};
+      try { body = await response.json(); } catch { /* status and fallback text are enough */ }
+      if (dashboardAttempt !== attempt) return;
+      if (response.ok) {
+        dashboardAttempt = { ...attempt, at: Date.now(), outcome: 'sent' };
+        if (dashboardWarning) setDashboardWarning('');
+        return;
+      }
+      const code = String(body && body.code ? body.code : '');
+      dashboardAttempt = {
+        ...attempt,
+        at: Date.now(),
+        outcome: response.status === 429 ? 'quota' : 'failed',
+      };
+      setDashboardWarning(`${lang === 'ja' ? 'Bot に送れません（お試し）' : 'Could not send to Bot (experimental)'}: ${dashboardFailureReason(response.status, code, lang)}`);
+    } catch {
+      if (dashboardAttempt !== attempt) return;
+      dashboardAttempt = { ...attempt, at: Date.now(), outcome: 'failed' };
+      setDashboardWarning(lang === 'ja' ? 'Bot に送れません（お試し）: ネットワークエラー' : 'Could not send to Bot (experimental): network error');
+    }
+  };
 
   const pick = (repo) => {
     if (onRepo) onRepo(repo);
@@ -608,9 +734,18 @@ export function startDeskStatus({ root, stage, apiFetch, classify = null, lang =
   const refresh = () => {
     if (inFlight) return inFlight;
     inFlight = (async () => {
-      const response = await apiFetch('/api/apps/stira-kiro/repos', { cache: 'no-store' });
+      const [response, configResponse] = await Promise.all([
+        apiFetch('/api/apps/stira-kiro/repos', { cache: 'no-store' }),
+        apiFetch('/api/apps/stira-kiro/repos/config', { cache: 'no-store' }),
+      ]);
       if (!response.ok) throw new Error(String(response.status));
-      return apply(await response.json());
+      if (configResponse.ok) {
+        const config = await configResponse.json();
+        dashboardBot = typeof config.dashboardBot === 'string' ? config.dashboardBot : '';
+      }
+      const next = apply(await response.json());
+      await sendDashboard(next);
+      return next;
     })().finally(() => { inFlight = null; });
     return inFlight;
   };
@@ -672,8 +807,17 @@ export function startDeskStatus({ root, stage, apiFetch, classify = null, lang =
     ready,
     refresh,
     getPayload: () => payload,
-    setPayload: apply,
-    updateRepository: (repository) => apply(replaceRepository(payload, repository)),
+    getDashboardWarning: () => dashboardWarning,
+    setPayload: (next) => {
+      const applied = apply(next);
+      void sendDashboard(applied);
+      return applied;
+    },
+    updateRepository: (repository) => {
+      const applied = apply(replaceRepository(payload, repository));
+      void sendDashboard(applied);
+      return applied;
+    },
     stop: () => {
       stopped = true;
       clearTimeout(timer);
@@ -713,7 +857,18 @@ export function openDeskPicker({ root, apiFetch, classify, lang, onRepo, deskSta
   const rows = el('div', 'kc-desk-rows');
   rows.setAttribute('role', 'list');
   rows.setAttribute('aria-label', ja ? 'リポジトリのやることリスト' : 'Repository to-do list');
-  const hint = el('p', 'kc-desk-hint', ja ? '読み込み中…' : 'Loading…');
+  const hint = el('div', 'kc-desk-hint');
+  const hintText = el('span', '', ja ? '読み込み中…' : 'Loading…');
+  const dashboardWarning = el('span', 'kc-desk-dashboard-warning');
+  hint.append(hintText, dashboardWarning);
+  const setHint = (text) => { hintText.textContent = text; };
+  const setDashboardWarning = (text) => {
+    dashboardWarning.textContent = text || '';
+    dashboardWarning.hidden = !text;
+  };
+  setDashboardWarning(deskStatus && deskStatus.getDashboardWarning ? deskStatus.getDashboardWarning() : '');
+  const onDashboard = (event) => setDashboardWarning(event.detail && event.detail.warning);
+  root.addEventListener('stira:desk-dashboard', onDashboard);
   box.append(head, rows, hint);
   stage.append(box);
   const anchor = stage.querySelector('.kc-hotspot[data-spot="desk"]');
@@ -727,6 +882,7 @@ export function openDeskPicker({ root, apiFetch, classify, lang, onRepo, deskSta
   const close = () => {
     box.remove();
     document.removeEventListener('keydown', onEscape, true);
+    root.removeEventListener('stira:desk-dashboard', onDashboard);
   };
   const onEscape = (event) => {
     if (event.key === 'Escape') {
@@ -738,8 +894,8 @@ export function openDeskPicker({ root, apiFetch, classify, lang, onRepo, deskSta
   document.addEventListener('keydown', onEscape, true);
   shut.addEventListener('click', close);
   let payload = null;
-  let config = { paths: [], scanRoots: [], scanDepth: 1 };
-  let draft = { paths: [], scanRoots: [], scanDepth: 1 };
+  let config = { paths: [], scanRoots: [], scanDepth: 1, dashboardBot: '' };
+  let draft = { paths: [], scanRoots: [], scanDepth: 1, dashboardBot: '' };
   let view = initialView === 'settings' ? 'settings' : 'list';
   let configProblems = new Map();
   let configError = '';
@@ -846,6 +1002,7 @@ export function openDeskPicker({ root, apiFetch, classify, lang, onRepo, deskSta
         paths: uniqueDeskPaths(config.paths),
         scanRoots: uniqueDeskPaths(config.scanRoots),
         scanDepth: 1,
+        dashboardBot: typeof config.dashboardBot === 'string' ? config.dashboardBot : '',
       };
       configProblems = new Map();
       configError = '';
@@ -916,6 +1073,34 @@ export function openDeskPicker({ root, apiFetch, classify, lang, onRepo, deskSta
     return section;
   };
 
+  const dashboardBotField = () => {
+    const section = el('section', 'kc-desk-config-section');
+    const title = ja ? 'ダッシュボードに出す Bot（お試し）' : 'Bot dashboard (experimental)';
+    section.append(el('h3', 'kc-desk-config-title', title));
+    section.append(el('p', 'kc-desk-config-note', ja
+      ? '試験中の機能です。Stage を開いている間だけ、作業机の要約をこの Bot のダッシュボードへ送ります。'
+      : 'Experimental. While Stage is open, the workbench summary is sent to this Bot\'s dashboard.'));
+    const input = el('input', 'kc-desk-config-input kc-desk-dashboard-input');
+    input.type = 'text';
+    input.value = typeof draft.dashboardBot === 'string' ? draft.dashboardBot : '';
+    input.maxLength = 64;
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.placeholder = ja ? '例: desk-bot（空なら送らない）' : 'e.g. desk-bot (leave empty to disable)';
+    input.setAttribute('aria-label', title);
+    input.addEventListener('input', () => {
+      draft.dashboardBot = input.value;
+      configProblems.delete('dashboardBot:0');
+      configError = '';
+      const old = section.querySelector('.kc-desk-config-error');
+      if (old) old.remove();
+    });
+    section.append(input);
+    const reason = configProblems.get('dashboardBot:0');
+    if (reason) section.append(el('p', 'kc-desk-config-error', reason));
+    return section;
+  };
+
   async function saveSettings(saveButton) {
     if (saving) return;
     saving = true;
@@ -928,6 +1113,7 @@ export function openDeskPicker({ root, apiFetch, classify, lang, onRepo, deskSta
         paths: uniqueDeskPaths(draft.paths),
         scanRoots: uniqueDeskPaths(draft.scanRoots),
         scanDepth: 1,
+        dashboardBot: typeof draft.dashboardBot === 'string' ? draft.dashboardBot : '',
       };
       const response = await apiFetch('/api/apps/stira-kiro/repos/config', {
         method: 'PUT',
@@ -944,7 +1130,12 @@ export function openDeskPicker({ root, apiFetch, classify, lang, onRepo, deskSta
         return;
       }
       config = body.config || submitted;
-      draft = { paths: [...config.paths], scanRoots: [...config.scanRoots], scanDepth: 1 };
+      draft = {
+        paths: [...config.paths],
+        scanRoots: [...config.scanRoots],
+        scanDepth: 1,
+        dashboardBot: typeof config.dashboardBot === 'string' ? config.dashboardBot : '',
+      };
       if (deskStatus) payload = await deskStatus.refresh();
       else {
         const reposResponse = await apiFetch('/api/apps/stira-kiro/repos', { cache: 'no-store' });
@@ -978,6 +1169,7 @@ export function openDeskPicker({ root, apiFetch, classify, lang, onRepo, deskSta
     rows.append(
       configField('scanRoots', ja ? '探すフォルダ' : 'Folders to scan'),
       configField('paths', ja ? '個別に指定したリポジトリ' : 'Individually listed repositories'),
+      dashboardBotField(),
     );
     if (configError) rows.append(el('p', 'kc-desk-config-message', configError));
     const actions = el('div', 'kc-desk-config-actions');
@@ -996,9 +1188,9 @@ export function openDeskPicker({ root, apiFetch, classify, lang, onRepo, deskSta
     save.addEventListener('click', () => { void saveSettings(save); });
     actions.append(save, cancel);
     rows.append(actions);
-    hint.textContent = ja
+    setHint(ja
       ? '絶対パスだけ保存できます。ネットワークパス、リンク、ジャンクションは使えません。'
-      : 'Only absolute local paths are allowed. Network paths, links, and junctions are rejected.';
+      : 'Only absolute local paths are allowed. Network paths, links, and junctions are rejected.');
   }
 
   function renderRows(focusId = activeId) {
@@ -1029,13 +1221,13 @@ export function openDeskPicker({ root, apiFetch, classify, lang, onRepo, deskSta
     for (const action of actions) action.tabIndex = action === selected ? 0 : -1;
     activeId = selected ? selected.dataset.rowId : null;
     if (focusId && selected) selected.focus({ preventScroll: true });
-    hint.textContent = empty === 'unconfigured'
+    setHint(empty === 'unconfigured'
       ? (ja ? '「フォルダ」から見る場所を追加してください' : 'Use Folders to add locations to watch')
       : empty === 'not-found'
         ? (ja ? '「フォルダ」で設定を見直してください' : 'Review the configuration under Folders')
         : ja
           ? `${listing.actionable.length} 件に手が要る · 行を選ぶとボードで開きます`
-          : `${listing.actionable.length} need attention · select a row to open it on the board`;
+          : `${listing.actionable.length} need attention · select a row to open it on the board`);
   }
 
   rows.addEventListener('focusin', (event) => {
@@ -1068,6 +1260,7 @@ export function openDeskPicker({ root, apiFetch, classify, lang, onRepo, deskSta
         paths: uniqueDeskPaths(config.paths),
         scanRoots: uniqueDeskPaths(config.scanRoots),
         scanDepth: 1,
+        dashboardBot: typeof config.dashboardBot === 'string' ? config.dashboardBot : '',
       };
       payload = deskStatus && deskStatus.getPayload();
       if (!payload) {
@@ -1080,9 +1273,9 @@ export function openDeskPicker({ root, apiFetch, classify, lang, onRepo, deskSta
       }
     } catch (err) {
       const message = String(err && err.message);
-      hint.textContent = message === '404'
+      setHint(message === '404'
         ? (ja ? '作業机のバックエンドが入っていません。ライブラリで Stira Stage の「同期」を押してください。' : 'The workbench backend is not installed. Sync Stira Stage in the Library.')
-        : (ja ? '作業机を読めませんでした: ' : 'Could not read the workbench: ') + message;
+        : (ja ? '作業机を読めませんでした: ' : 'Could not read the workbench: ') + message);
       return true;
     }
     if (view === 'settings' || deskEmptyState(config, payload) === 'unconfigured') {

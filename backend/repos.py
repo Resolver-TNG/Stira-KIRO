@@ -12,6 +12,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 import subprocess
 import threading
 import time
@@ -23,9 +24,11 @@ from urllib.parse import urlsplit, urlunsplit
 from .sanitize import clean_field, redact
 from .shelf import crew_home
 
-DEFAULT_CONFIG: dict[str, Any] = {"paths": [], "scanRoots": [], "scanDepth": 1}
+DEFAULT_CONFIG: dict[str, Any] = {"paths": [], "scanRoots": [], "scanDepth": 1, "dashboardBot": ""}
 MAX_PATHS = 200
 MAX_PATH_LENGTH = 1024
+MAX_DASHBOARD_BOT_LENGTH = 64
+DASHBOARD_BOT_RE = re.compile(r"^[a-z0-9_-]+$")
 GIT_TIMEOUT = 10
 FETCH_TIMEOUT = 60
 STATUS_TTL = 300.0
@@ -79,8 +82,17 @@ def config_path(home: Path | None = None) -> Path:
     return (home or crew_home()) / "workspace" / "memory" / "stira" / "repos.json"
 
 
-def validate_config(value: Any) -> dict[str, Any]:
-    """Validate and copy the complete JSON shape accepted by PUT /repos/config."""
+def _dashboard_bot_reason(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return "dashboardBot must be a string"
+    if len(value) > MAX_DASHBOARD_BOT_LENGTH:
+        return f"dashboardBot must be at most {MAX_DASHBOARD_BOT_LENGTH} characters"
+    if value and not DASHBOARD_BOT_RE.fullmatch(value):
+        return "dashboardBot must contain only lowercase letters, digits, hyphens, and underscores"
+    return None
+
+
+def _shape_config(value: Any, *, check_dashboard_bot: bool) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ConfigError("config must be a JSON object")
     out: dict[str, Any] = {}
@@ -104,7 +116,17 @@ def validate_config(value: Any) -> dict[str, Any]:
     if isinstance(depth, bool) or depth != 1:
         raise ConfigError("scanDepth must be 1")
     out["scanDepth"] = 1
+    dashboard_bot = value.get("dashboardBot", "")
+    reason = _dashboard_bot_reason(dashboard_bot)
+    if check_dashboard_bot and reason:
+        raise ConfigError(reason)
+    out["dashboardBot"] = dashboard_bot
     return out
+
+
+def validate_config(value: Any) -> dict[str, Any]:
+    """Validate and copy the complete JSON shape accepted by PUT /repos/config."""
+    return _shape_config(value, check_dashboard_bot=True)
 
 
 def normalize_config_path(value: str) -> str:
@@ -127,9 +149,17 @@ def inspect_config_paths(value: Any) -> tuple[dict[str, Any], list[dict[str, Any
     Problems retain the submitted array index so the picker can show each reason beside
     the matching row. Duplicate paths are removed independently within each field.
     """
-    shaped = validate_config(value)
-    normalized: dict[str, Any] = {"paths": [], "scanRoots": [], "scanDepth": 1}
+    shaped = _shape_config(value, check_dashboard_bot=False)
+    dashboard_reason = _dashboard_bot_reason(shaped["dashboardBot"])
+    normalized: dict[str, Any] = {
+        "paths": [],
+        "scanRoots": [],
+        "scanDepth": 1,
+        "dashboardBot": shaped["dashboardBot"] if dashboard_reason is None else "",
+    }
     problems: list[dict[str, Any]] = []
+    if dashboard_reason:
+        problems.append({"field": "dashboardBot", "index": 0, "reason": dashboard_reason})
 
     for field in ("paths", "scanRoots"):
         seen: set[str] = set()

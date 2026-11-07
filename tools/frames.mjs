@@ -119,6 +119,7 @@ for (let n = Math.max(1, FROM); n <= TO; n += STEP) {
         if (d.frozen !== '1') return null;
         const c = r.querySelector('#view').getBoundingClientRect(); const s = r.querySelector('#stage').getBoundingClientRect();
         return { frame: d.charFrame || '', face: d.charFace || '', step: d.step || '', render: d.render || '', layout: r.stiraLayout || null,
+          sent: window.__stira && Array.isArray(window.__stira.sent) ? window.__stira.sent : [],
           view: [c.left, c.top, c.width, c.height], stage: [s.left, s.top, s.width, s.height] }; })()`);
     } catch {
       info = null;

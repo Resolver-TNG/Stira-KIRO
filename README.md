@@ -9,7 +9,7 @@ and for keeping what you did as a story you can find again. The lab is the home 
 to the character in a text window, open memory books on the shelf, and watch a forest of memories
 grow outside the window.
 
-Status: v0.7.0, in development. Requires Kiro Crew 0.11 or later. UI in English and Japanese
+Status: v0.7.1, in development. Requires Kiro Crew 0.11 or later. UI in English and Japanese
 (follows the dashboard's language).
 
 ## What it does
@@ -20,6 +20,8 @@ Status: v0.7.0, in development. Requires Kiro Crew 0.11 or later. UI in English 
 - **Using memory**: on the Stage, each message carries the related chapters and leaves. In ordinary chats, the `stira-memory` skill points Kiro at the index (`INDEX.md`).
 - **The room reacts**: turns, tools, memory events and other sessions' work move the character and the props.
 - **Narratives**: from the chapters, each book gets a short "where this stands" (latest outcome, the arc so far, recent decisions, lessons). Built by plain rules with no model call, refreshed whenever chapters change. Lessons that recur in two or more chapters become promotion candidates for you to turn into lessons or steering.
+- **Workbench**: the desk in the room shows your local Git repositories, read only. Each repository is a note on the wall (a red "!" when it needs attention), and the desk opens a to-do list: behind its upstream, stale worktrees, uncommitted changes, unpushed commits and so on. Pick folders to watch from the desk's **Folders** screen. Nothing contacts a remote except the per-repository **fetch** button.
+- **Bot dashboard (experimental)**: optionally sends the workbench summary to one Kiro Crew Bot's Dashboard page through member records, while Stage is open. Off until you name a Bot. See `docs/bot-dashboard.md`.
 
 ## Which Stira?
 - **Stira Forest** ([Resolver-TNG/Stira-Forest-KiroCrew](https://github.com/Resolver-TNG/Stira-Forest-KiroCrew)): for Kiro Crew as it ships. Install, enable, set each crew's core mission, and its knowledge grows as a tree. No steering or hooks to edit.
