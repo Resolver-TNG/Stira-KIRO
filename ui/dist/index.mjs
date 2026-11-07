@@ -105,6 +105,7 @@ export default function StiraStage() {
     const el = host.current
     if (!el) return undefined
     let alive = true
+    let deskStatus = null
     const base = stageBase()
     // The app's scoped client, shaped like window.fetch: a refusal comes back as a Response
     // (the Stage reads status codes), anything else (network, abort) still throws.
@@ -128,7 +129,7 @@ export default function StiraStage() {
       root.innerHTML = tplMod.TEMPLATE // constant markup, no interpolated data
       const lang = pickLang()
       // everything the Stage needs before it starts, in parallel
-      const [catalog, , , , kc, confirm, hot, shelfMod, md, forestMod] = await Promise.all([
+      const [catalog, , , , kc, confirm, hot, shelfMod, deskMod, md, forestMod] = await Promise.all([
         loadCatalog(base, lang),
         addCss(`${base}stage.css`),
         addCss(`${base}stira-shell.css`),
@@ -137,6 +138,7 @@ export default function StiraStage() {
         import(`${base}js/kc_confirm.js`),
         import(`${base}js/kc_hotspots.js`),
         import(`${base}js/kc_shelf.js`),
+        import(`${base}js/kc_desk.js`),
         import(`${base}js/markdown.js`),
         import(`${base}js/kc_forest.js`),
       ])
@@ -189,6 +191,18 @@ export default function StiraStage() {
           })
           return true
         }
+        if (id === 'desk') {
+          if (root.stiraLive) root.stiraLive.ingestTurnEvent({ type: 'memory.recall', name: 'desk', ms: 2800 })
+          void deskMod.openDeskPicker({
+            root,
+            apiFetch,
+            classify: md.classify,
+            lang,
+            deskStatus,
+            onRepo: () => root.stiraLive && root.stiraLive.ingestTurnEvent({ type: 'memory.recall', name: 'repo', ms: 2400 }),
+          })
+          return true
+        }
         if (id === 'window') {
           const w = root.querySelector('.kc-hotspot[data-spot="window"]')
           const from = w ? { left: w.offsetLeft, top: w.offsetTop, width: w.offsetWidth, height: w.offsetHeight } : null
@@ -198,6 +212,14 @@ export default function StiraStage() {
         return false
       }
       await hot.startHotspots({ root, stage: stageEl, base: `${base}assets`, lang, onPress })
+      deskStatus = deskMod.startDeskStatus({
+        root,
+        stage: stageEl,
+        apiFetch,
+        classify: md.classify,
+        lang,
+        onRepo: () => root.stiraLive && root.stiraLive.ingestTurnEvent({ type: 'memory.recall', name: 'repo', ms: 2400 }),
+      })
       // 他のセッションの作業を部屋に映す(見えている間だけ、数秒おき)
       const watchMod = await import(`${base}js/kc_watch.js`)
       if (!alive) return
@@ -214,6 +236,7 @@ export default function StiraStage() {
     })
     return () => {
       alive = false
+      if (deskStatus) deskStatus.stop()
       el.replaceChildren() // the Stage's loop and keys stop once its root is gone (main.js stageGone)
     }
   }, [])

@@ -1,6 +1,6 @@
-// Stira-KIRO: places in the room you can press. The shelf is the memory's table of contents
-// (milestone 2: the board shows the books = projects), the window looks out at the forest
-// (milestone 2: the camera goes out to Forest). Until then a press shows a "coming soon" tag.
+// Stira-KIRO: places in the room you can press. The shelf is the memory's table of contents,
+// the window looks out at the forest, and the desk shows local Git repositories. A place with
+// no handler yet falls back to a short "coming soon" tag.
 //
 // Positions come from the room art (assets/bg/bg.json: image coords, 640 x 340) and the layout
 // main.js reports ('stira:layout': scale, view). Image -> screen: x - viewLeft(vw), y - 10
@@ -13,6 +13,7 @@ const viewLeft = (vw) => Math.round(320 - vw / 2); // scene.js viewLeft
 export const SPOTS = [
   { id: 'shelf', key: 'bgShelf', ja: '記憶の棚', en: 'MEMORY', soonJa: '準備中…本が並ぶ予定', soonEn: 'COMING SOON' },
   { id: 'window', key: 'bgWindow', ja: '窓の外の森', en: 'FOREST', soonJa: '準備中…森が見える予定', soonEn: 'COMING SOON' },
+  { id: 'desk', key: 'bgDesk', ja: '作業机', en: 'WORKBENCH', soonJa: '準備中…作業場所が並ぶ予定', soonEn: 'COMING SOON' },
 ];
 
 export function spotRect(rect, { scale, view }) {
@@ -28,7 +29,11 @@ export async function startHotspots({ root, stage, base, lang, onPress }) {
     return null;
   }
   // the whole bookcase as drawn (rects.shelf), not only its lit middle (meta.shelf)
-  const rects = { bgShelf: (meta.rects && meta.rects.shelf) || meta.shelf, bgWindow: meta.window };
+  const rects = {
+    bgShelf: (meta.rects && meta.rects.shelf) || meta.shelf,
+    bgWindow: meta.window,
+    bgDesk: meta.rects && meta.rects.desk,
+  };
   const nodes = SPOTS.filter((s) => Array.isArray(rects[s.key])).map((s) => {
     const b = document.createElement('button');
     b.type = 'button';

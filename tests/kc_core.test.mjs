@@ -168,8 +168,53 @@ test('the shelf is a board: a heading per book, chapters as a list, markup escap
     chapters: [{ title: 'Stira *forest* <b>x</b>', agent: 'kirocrew', updatedAt: '2026-10-31T00:00:00Z' }, { title: 'two', agent: '', updatedAt: '2026-10-30T00:00:00Z' }] }] }, 'ja');
   assert.match(md, /^# 記憶の棚/);
   assert.match(md, /## ◆ workspace/);
-  assert.match(md, /Stira \\\*forest\\\* \\<b\\>x\\<\/b\\>/);
   assert.equal(classify(md).mode, 'board');
+  // what the board shows: no emphasis from the title's stars, the tags as typed, no backslashes
+  const shown = JSON.stringify(parse(md));
+  assert.match(shown, /Stira ∗forest∗ <b>x<\/b>/);
+  assert.doesNotMatch(shown, /"t":"em"|\\\\/);
+});
+
+// What the board actually draws, through the board's own parser: text that came from memory must
+// read as typed (no stray backslashes) and must not turn into emphasis, code, headings or lists.
+const { parse } = await import('../ui/stage/js/markdown.js');
+const flat = (blocks) => {
+  const out = { kinds: [], text: '' };
+  const walk = (n) => {
+    if (Array.isArray(n)) return n.forEach(walk);
+    if (!n || typeof n !== 'object') return;
+    if (n.t) out.kinds.push(n.t);
+    if (typeof n.v === 'string') out.text += `${n.v}\n`;
+    for (const k of ['inl', 'items', 'rows']) if (n[k]) walk(n[k]);
+  };
+  walk(blocks);
+  return out;
+};
+
+test('shelf text from memory reads as typed on the board', async () => {
+  const { bookMarkdown } = await import('../ui/stage/js/kc_shelf.js');
+  const title = 'PR #843 の snake_case_name と C:\\example\\x を直す';
+  const md = bookMarkdown({ kind: 'project', name: 'repo_a', chapterCount: 1, chapters: [
+    { title, updatedAt: '2026-10-31T00:00:00Z', excerpt: '# 見出しっぽい抜粋 *星* `tick` _edge_' },
+  ] }, 'ja');
+  const { kinds, text } = flat(parse(md));
+  assert.ok(text.includes(title), text);
+  assert.ok(text.includes('repo_a'));
+  assert.doesNotMatch(text, /\\#|\\_|\\\*|\\`/);
+  // the excerpt is one paragraph: not a heading, no em/strong/code from its characters
+  assert.equal(kinds.filter((k) => k === 'h').length, 2, kinds.join(','));
+  assert.ok(!kinds.includes('em') && !kinds.includes('code'), kinds.join(','));
+  assert.ok(text.includes('# 見出しっぽい抜粋 ∗星∗ ʹtickʹ ＿edge＿'), text);
+});
+
+test('story bullets stay one list level and their text is defused', async () => {
+  const { bookMarkdown } = await import('../ui/stage/js/kc_shelf.js');
+  const book = { kind: 'talk', name: '会話: x', chapterCount: 1, chapters: [{ title: 't', story: { 判断: '- *A* を採用\n- 2. B は見送り\n補足 1 行' }, leaves: [] }] };
+  const en = flat(parse(bookMarkdown(book, 'en')));
+  assert.ok(en.text.includes('∗A∗ を採用') && en.text.includes('2. B は見送り'), en.text);
+  assert.ok(en.kinds.includes('ul') && !en.kinds.includes('ol') && !en.kinds.includes('em'), en.kinds.join(','));
+  const ja = bookMarkdown(book, 'ja');
+  assert.match(ja, /・∗A∗ を採用\n・2\. B は見送り\n補足 1 行/);
 });
 
 

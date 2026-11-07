@@ -368,3 +368,268 @@
   text-shadow: var(--px) var(--px) 0 #0b0a16;
 }
 .stira-stage-root .kc-recall::before { content: "▸ "; }
+
+
+/* --- local Git workbench (kc_desk.js) ----------------------------------------------------- */
+.stira-stage-root .kc-desk {
+  position: absolute;
+  z-index: 8;
+  left: 24px;
+  top: 24px;
+  width: min(76%, 760px);
+  max-height: calc(100% - 16px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: calc(var(--px) * 3) calc(var(--px) * 4) calc(var(--px) * 2);
+  font-family: var(--font);
+  -webkit-font-smoothing: none;
+  color: var(--ink);
+  background: var(--fill);
+  box-shadow: inset 0 0 0 var(--px) color-mix(in srgb, var(--neon) 60%, transparent);
+  clip-path: var(--steps);
+}
+.stira-stage-root .kc-desk-head { display: flex; flex: none; align-items: center; gap: 8px; margin-bottom: calc(var(--px) * 2); }
+.stira-stage-root .kc-desk-title {
+  margin-right: auto;
+  padding: 1px calc(var(--px) * 3);
+  color: #0b0a16;
+  background: var(--neon);
+  clip-path: var(--steps);
+  letter-spacing: 0.08em;
+  font-size: clamp(12px, calc(var(--px) * 4), 16px);
+}
+.stira-stage-root .kc-desk-rows {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--px);
+  overflow: auto;
+  scrollbar-color: var(--line) var(--deep);
+}
+.stira-stage-root .kc-desk-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  min-width: 0;
+}
+.stira-stage-root .kc-desk-row-action {
+  display: grid;
+  grid-template-columns: calc(var(--px) * 5) minmax(8em, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: calc(var(--px) * 2);
+  min-width: 0;
+  min-height: calc(var(--px) * 10);
+  padding: calc(var(--px) * 1.2) calc(var(--px) * 2);
+  border: 0;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--line) 18%, var(--deep));
+  box-shadow: inset 0 0 0 var(--px) color-mix(in srgb, var(--line) 42%, transparent);
+  font: inherit;
+  font-size: clamp(10px, calc(var(--px) * 3.2), 12px);
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+.stira-stage-root .kc-desk-row-action:hover { background: color-mix(in srgb, var(--neon) 12%, var(--deep)); }
+.stira-stage-root .kc-desk-row-action:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 var(--px) var(--neon);
+}
+.stira-stage-root .kc-desk-row-mark {
+  color: var(--dim-ink);
+  font-weight: bold;
+  text-align: center;
+}
+.stira-stage-root .kc-desk-item[data-status="red"] .kc-desk-row-mark { color: var(--crit-fg); }
+.stira-stage-root .kc-desk-item[data-status="yellow"] .kc-desk-row-mark { color: var(--warn); }
+.stira-stage-root .kc-desk-name,
+.stira-stage-root .kc-desk-issue,
+.stira-stage-root .kc-desk-clean-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stira-stage-root .kc-desk-name { color: var(--ink); font-weight: bold; }
+.stira-stage-root .kc-desk-issue { color: var(--dim-ink); }
+.stira-stage-root .kc-desk-row-clean { padding-left: calc(var(--px) * 7); }
+.stira-stage-root .kc-desk-clean-summary { margin-top: calc(var(--px) * 2); }
+.stira-stage-root .kc-desk-clean-summary .kc-desk-row-action { color: var(--ok); }
+.stira-stage-root .kc-desk-clean-label { grid-column: 2 / -1; }
+.stira-stage-root .kc-desk-fetch { min-width: 4.8em; padding-inline: 6px; }
+.stira-stage-root .kc-desk-fetch:disabled { color: var(--dim-ink); cursor: wait; }
+.stira-stage-root .kc-desk-fetch-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0 calc(var(--px) * 10) calc(var(--px) * 2);
+  color: var(--crit-fg);
+  font-size: clamp(9px, calc(var(--px) * 3), 11px);
+  overflow-wrap: anywhere;
+}
+.stira-stage-root .kc-desk-hint {
+  flex: none;
+  margin: calc(var(--px) * 2) 0 0;
+  font-size: clamp(10px, calc(var(--px) * 3.2), 12px);
+  color: var(--dim-ink);
+}
+.stira-stage-root .kc-desk-notes {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  transition: filter var(--duration-base);
+}
+.stira-stage-root .kc-desk-notes[hidden] { display: none; }
+.stira-stage-root .kc-desk-note {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  outline: none;
+  pointer-events: auto;
+  background-color: transparent;
+  background-position: 0 0;
+  background-repeat: no-repeat;
+  /* ドット絵のまま: 傾きと影は絵に描いてある。回転・拡大・ぼかしはしない */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+/* 押せることは 1 ドット浮かせて示す (部屋の倍率の整数倍だけ動かす) */
+.stira-stage-root .kc-desk-note:hover,
+.stira-stage-root .kc-desk-note:focus-visible { transform: translateY(calc(var(--px) * -1)); }
+.stira-stage-root .kc-desk-note:focus-visible { outline: var(--px) dashed var(--neon); outline-offset: calc(var(--px) * -2); }
+.stira-stage-root .kc-desk-note-more {
+  position: absolute;
+  z-index: 2;
+  min-width: calc(var(--px) * 12);
+  padding: calc(var(--px) * 1.5) calc(var(--px) * 2.5);
+  color: #0b0a16;
+  background: var(--neon);
+  box-shadow: var(--px) var(--px) 0 rgb(3 3 12 / .75);
+  font: bold clamp(12px, calc(var(--px) * 4), 15px) var(--font);
+  text-align: center;
+  line-height: 1;
+  pointer-events: none;
+}
+/* 貼り直し: 上から落ちてきて、1 ドット沈んで止まる。コマ送り (steps) でドット絵の動きにする */
+.stira-stage-root .kc-desk-note-restick { animation: kc-desk-restick 420ms steps(1, end) 1; }
+@keyframes kc-desk-restick {
+  0% { transform: translateY(calc(var(--px) * -6)); opacity: 0; }
+  25% { transform: translateY(calc(var(--px) * -4)); opacity: 1; }
+  50% { transform: translateY(calc(var(--px) * -1)); }
+  75% { transform: translateY(var(--px)); }
+  100% { transform: none; }
+}
+.stira-stage-root .stage:has(.board:not([hidden])) .kc-desk-notes,
+.stira-stage-root.raw-on .kc-desk-notes { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .stira-stage-root .kc-desk-notes { transition: none; }
+  .stira-stage-root .kc-desk-note-restick { animation: none; }
+}
+.stira-stage-root .board:not([hidden]) ~ .kc-desk { display: none; }
+@media (max-width: 768px) { .stira-stage-root .kc-desk { width: calc(100% - 16px); left: 8px !important; } }
+
+
+/* Workbench folder configuration: the picker keeps its fixed top edge and bounded height. */
+.stira-stage-root .kc-desk-folders-attention {
+  color: #0b0a16;
+  background: var(--warn);
+  box-shadow: inset 0 0 0 var(--px) var(--warn-fg);
+}
+.stira-stage-root .kc-desk-settings { gap: calc(var(--px) * 3); }
+.stira-stage-root .kc-desk-empty {
+  margin: 0;
+  padding: calc(var(--px) * 3);
+  color: var(--warn-fg);
+  background: color-mix(in srgb, var(--warn-bg) 72%, var(--deep));
+  box-shadow: inset 0 0 0 var(--px) var(--warn-border);
+  font-size: clamp(10px, calc(var(--px) * 3.4), 13px);
+}
+.stira-stage-root .kc-desk-config-section {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--px) * 2);
+  min-width: 0;
+}
+.stira-stage-root .kc-desk-config-title {
+  margin: 0;
+  color: var(--neon);
+  font-size: clamp(11px, calc(var(--px) * 3.6), 14px);
+  font-weight: normal;
+  letter-spacing: 0.05em;
+}
+.stira-stage-root .kc-desk-config-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px);
+  min-width: 0;
+}
+.stira-stage-root .kc-desk-config-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(var(--px) * 2);
+  min-width: 0;
+  padding: calc(var(--px) * 1.2) calc(var(--px) * 2);
+  background: color-mix(in srgb, var(--line) 18%, var(--deep));
+  box-shadow: inset 0 0 0 var(--px) color-mix(in srgb, var(--line) 42%, transparent);
+}
+.stira-stage-root .kc-desk-config-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: clamp(10px, calc(var(--px) * 3.2), 12px);
+}
+.stira-stage-root .kc-desk-config-remove { min-width: calc(var(--px) * 8); padding-inline: 5px; }
+.stira-stage-root .kc-desk-config-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--crit-fg);
+  font-size: clamp(9px, calc(var(--px) * 3), 11px);
+  overflow-wrap: anywhere;
+}
+.stira-stage-root .kc-desk-config-none {
+  margin: 0;
+  padding: 0 calc(var(--px) * 2);
+  color: var(--dim-ink);
+  font-size: clamp(9px, calc(var(--px) * 3), 11px);
+}
+.stira-stage-root .kc-desk-config-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: calc(var(--px) * 2);
+}
+.stira-stage-root .kc-desk-config-input {
+  min-width: 0;
+  padding: calc(var(--px) * 1.4) calc(var(--px) * 2);
+  border: 0;
+  border-radius: 0;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--deep) 75%, var(--fill));
+  box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line);
+  font: clamp(10px, calc(var(--px) * 3.2), 12px) var(--font-mono);
+}
+.stira-stage-root .kc-desk-config-input::placeholder { color: var(--dim-ink); opacity: 1; }
+.stira-stage-root .kc-desk-config-input:focus {
+  outline: none;
+  box-shadow: inset 0 calc(var(--px) * -1) 0 var(--neon);
+}
+.stira-stage-root .kc-desk-config-message {
+  margin: 0;
+  color: var(--crit-fg);
+  font-size: clamp(9px, calc(var(--px) * 3), 11px);
+}
+.stira-stage-root .kc-desk-config-actions {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  gap: calc(var(--px) * 2);
+  padding-top: calc(var(--px) * 2);
+  border-top: var(--px) dashed color-mix(in srgb, var(--line) 55%, transparent);
+}
+.stira-stage-root .kc-desk-config-save { color: #0b0a16; background: var(--neon); }
+.stira-stage-root .kc-desk-config-save:disabled { color: var(--dim-ink); background: var(--deep); cursor: wait; }

@@ -41,7 +41,29 @@ export function recallType(type, lang = 'ja') {
 }
 
 // Markdown subset: no raw HTML, and every character the subset treats as markup is escaped
-const esc = (s) => String(s ?? '').replace(/[\\`*_[\]#|<>]/g, (c) => `\\${c}`).replace(/\s+/g, ' ').trim();
+// The board's Markdown subset (markdown.js) has no backslash escapes: a `\` stays on screen and
+// `\*x\*` still becomes emphasis. So markup is defused with look-alikes instead, and only for the
+// characters the subset actually reads as markup (checked against markdown.js inline()/parse()):
+//   *  emphasis / strong, also inside words         -> U+2217 ∗
+//   `  code span                                     -> U+02B9 ʹ
+//   _  emphasis only at a word edge (snake_case is left alone) -> U+FF3F ＿
+//   a block marker at the very start (#, >, -, +, |, ~, digit) -> a zero-width space in front
+// Everything else (\, #, |, <, >, [ ] mid-line) is shown as typed. http(s) links stay links.
+const esc = (s) => {
+  let t = String(s ?? '').replace(/\s+/g, ' ').trim();
+  t = t.replace(/\*/g, '\u2217').replace(/`/g, '\u02b9').replace(/(?<![\p{L}\p{N}])_|_(?![\p{L}\p{N}])/gu, '\uff3f');
+  return /^[#>\-+|~0-9]/.test(t) ? `\u200b${t}` : t;
+};
+
+// A story line that was a bullet keeps one: the body is defused first, then the page's own
+// marker goes in front (・ in Japanese, a real list item in English).
+const storyLine = (ja) => (line) => {
+  const bullet = /^\s*[-*]\s*/.exec(line);
+  const body = esc(bullet ? line.slice(bullet[0].length) : line);
+  if (!body) return '';
+  // behind our own marker the text is no longer at the start of the line: no guard needed
+  return bullet ? `${ja ? '・' : '- '}${body.replace(/^\u200b/, '')}` : body;
+};
 
 // 1冊を開いた時: 要約済みの章は 状況→判断→結果→学び と葉まで、新しい順に
 export function bookMarkdown(book, lang = 'ja') {
@@ -52,7 +74,7 @@ export function bookMarkdown(book, lang = 'ja') {
     out.push(`## ${day(c.updatedAt, lang)} ${esc(c.title)}`);
     if (c.story) {
       for (const k of ['状況', '判断', '結果', '学び']) {
-        if (c.story[k]) out.push(`**${ja ? k : STORY_EN[k]}**\n${String(c.story[k]).split('\n').map((l) => esc(l.replace(/^[-*]\s*/, ja ? '・' : '- '))).filter(Boolean).join('\n')}`);
+        if (c.story[k]) out.push(`**${ja ? k : STORY_EN[k]}**\n${String(c.story[k]).split('\n').map(storyLine(ja)).filter(Boolean).join('\n')}`);
       }
       if (Array.isArray(c.leaves) && c.leaves.length) {
         out.push(`**${ja ? '葉(知識)' : 'Leaves'}**\n${c.leaves.map((l) => `- [${esc(leafKind(l.kind, lang))}] **${esc(l.title)}** — ${esc(l.text)}`).join('\n')}`);

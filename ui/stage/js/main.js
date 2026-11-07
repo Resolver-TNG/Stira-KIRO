@@ -257,6 +257,17 @@ if (params.get('webgl') !== '0') {
 }
 const still = !scene;
 if (still) scene = new StillScene(canvas, { sky });
+// Stira-KIRO: expose only the current room grade for DOM overlays. The scene stays private.
+stageRoot.stiraGrade = () => {
+  const grade = scene && scene.grade;
+  if (!grade || !grade.uDim || !grade.uDesat || !grade.uAmbient) return null;
+  const ambient = grade.uAmbient.value;
+  return {
+    dim: grade.uDim.value,
+    desat: grade.uDesat.value,
+    ambient: ambient ? [ambient.x, ambient.y, ambient.z] : [1, 1, 1],
+  };
+};
 stageRoot.dataset.render = still ? 'still' : 'webgl';
 const stillNote = document.getElementById('stage-still');
 if (stillNote) stillNote.hidden = !still;

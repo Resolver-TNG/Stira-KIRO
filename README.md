@@ -9,7 +9,7 @@ and for keeping what you did as a story you can find again. The lab is the home 
 to the character in a text window, open memory books on the shelf, and watch a forest of memories
 grow outside the window.
 
-Status: v0.6.1, in development. Requires Kiro Crew 0.11 or later. UI in English and Japanese
+Status: v0.7.0, in development. Requires Kiro Crew 0.11 or later. UI in English and Japanese
 (follows the dashboard's language).
 
 ## What it does

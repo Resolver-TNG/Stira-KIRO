@@ -24,7 +24,7 @@ if (!existsSync(join(dash, 'stage', 'js', 'main.js'))) {
 }
 
 // --- copy -------------------------------------------------------------------------------------
-const OWN = new Set(['kc_core.js', 'kc_live.js', 'kc_confirm.js', 'kc_widget.js', 'kc_hotspots.js', 'kc_shelf.js', 'kc_forest.js', 'kc_watch.js']);
+const OWN = new Set(['kc_core.js', 'kc_live.js', 'kc_confirm.js', 'kc_widget.js', 'kc_hotspots.js', 'kc_shelf.js', 'kc_desk.js', 'kc_forest.js', 'kc_watch.js']);
 mkdirSync(join(out, 'js'), { recursive: true });
 for (const name of readdirSync(join(out, 'js'))) {
   if (!OWN.has(name)) rmSync(join(out, 'js', name), { force: true });
@@ -117,6 +117,23 @@ patchFile('js/main.js', [
   ["HairLayer.load(scene, 'assets',", 'HairLayer.load(scene, ASSETS,'],
   ["loadCharRig('assets')", 'loadCharRig(ASSETS)'],
   ["DeskSeat.load(scene, 'assets', rig)", 'DeskSeat.load(scene, ASSETS, rig)'],
+  [
+    "const still = !scene;\nif (still) scene = new StillScene(canvas, { sky });\nstageRoot.dataset.render = still ? 'still' : 'webgl';",
+    "const still = !scene;\n" +
+      "if (still) scene = new StillScene(canvas, { sky });\n" +
+      '// Stira-KIRO: expose only the current room grade for DOM overlays. The scene stays private.\n' +
+      'stageRoot.stiraGrade = () => {\n' +
+      '  const grade = scene && scene.grade;\n' +
+      '  if (!grade || !grade.uDim || !grade.uDesat || !grade.uAmbient) return null;\n' +
+      '  const ambient = grade.uAmbient.value;\n' +
+      '  return {\n' +
+      '    dim: grade.uDim.value,\n' +
+      '    desat: grade.uDesat.value,\n' +
+      '    ambient: ambient ? [ambient.x, ambient.y, ambient.z] : [1, 1, 1],\n' +
+      '  };\n' +
+      '};\n' +
+      "stageRoot.dataset.render = still ? 'still' : 'webgl';",
+  ],
 ]);
 // inside the patched main.js, `stageRoot.ownerDocument.body` came from the literal above, keep it
 // Stira-KIRO: landscape scale = fill the height (as StiraCore does) but never so far that fewer

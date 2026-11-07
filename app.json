@@ -1,6 +1,6 @@
 {
   "name": "stira-kiro",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "displayName": "Stira Stage",
   "description": "Talk to your Kiro Crew agent in a pixel-art lab. The room shows what the agent is doing, long replies and diagrams drop onto a whiteboard, and the shelf opens your memory as books of chapters. UI in English and Japanese.",
   "author": "Resolver-TNG",

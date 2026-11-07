@@ -9,7 +9,7 @@ from aiohttp import web
 
 from kiro_crew.apps.route_registry import AppRoute
 
-from . import autosum, chapters, narrative, recall, shelf
+from . import autosum, chapters, narrative, recall, repos, shelf
 
 NO_STORE = {"Cache-Control": "no-store"}
 
@@ -17,6 +17,52 @@ NO_STORE = {"Cache-Control": "no-store"}
 async def get_shelf(_request: web.Request, _ctx: Any) -> web.Response:
     payload = await asyncio.to_thread(shelf.shelf_payload)
     return web.json_response(payload, headers=NO_STORE)
+
+
+async def get_repos(_request: web.Request, _ctx: Any) -> web.Response:
+    return web.json_response(await repos.build_payload(), headers=NO_STORE)
+
+
+async def post_repo_fetch(request: web.Request, _ctx: Any) -> web.Response:
+    repo_id = request.match_info.get("repo_id", "")
+    try:
+        payload = await asyncio.to_thread(repos.fetch_repository, repo_id)
+    except repos.RepositoryNotFound:
+        return web.json_response({"error": "repository not found"}, status=404, headers=NO_STORE)
+    except repos.FetchConflict as err:
+        body: dict[str, Any] = {"error": str(err)}
+        if err.payload is not None:
+            body["repository"] = err.payload
+        return web.json_response(body, status=409, headers=NO_STORE)
+    except repos.FetchFailed as err:
+        return web.json_response(
+            {"error": str(err), "repository": err.payload}, status=502, headers=NO_STORE
+        )
+    return web.json_response(payload, headers=NO_STORE)
+
+
+async def get_repos_config(_request: web.Request, _ctx: Any) -> web.Response:
+    config = await asyncio.to_thread(repos.read_config)
+    return web.json_response(config, headers=NO_STORE)
+
+
+async def put_repos_config(request: web.Request, _ctx: Any) -> web.Response:
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return web.json_response({"error": "json body required"}, status=400, headers=NO_STORE)
+    try:
+        result = await asyncio.to_thread(repos.save_config, body)
+    except repos.ConfigError as err:
+        return web.json_response({"error": str(err)}, status=400, headers=NO_STORE)
+    except repos.ConfigPathError as err:
+        return web.json_response(
+            {"error": str(err), "problems": err.problems}, status=422, headers=NO_STORE
+        )
+    except OSError as err:
+        return web.json_response({"error": str(err)}, status=500, headers=NO_STORE)
+    repos.clear_cache()
+    return web.json_response(result, headers=NO_STORE)
 
 
 async def get_health(_request: web.Request, _ctx: Any) -> web.Response:
@@ -129,6 +175,10 @@ def register_routes(_ctx: Any) -> list[AppRoute]:
     return [
         AppRoute(method="GET", path="/health", handler=get_health),
         AppRoute(method="GET", path="/shelf", handler=get_shelf),
+        AppRoute(method="GET", path="/repos", handler=get_repos),
+        AppRoute(method="POST", path="/repos/{repo_id}/fetch", handler=post_repo_fetch),
+        AppRoute(method="GET", path="/repos/config", handler=get_repos_config),
+        AppRoute(method="PUT", path="/repos/config", handler=put_repos_config),
         AppRoute(method="GET", path="/chapters/status", handler=get_chapters_status),
         AppRoute(method="POST", path="/chapters/run", handler=post_chapters_run),
         AppRoute(method="POST", path="/chapters/settings", handler=post_chapters_settings),

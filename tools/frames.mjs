@@ -1,6 +1,7 @@
 // Stage のフレームを撮る(依存なし: Node の http と、Chrome をパイプの DevTools で動かす)。
 //
 //   node tools/frames.mjs --state memory --from 0 --to 120 --step 4 [--size 1180x670] [--out DIR]
+//   node tools/frames.mjs --page desk --from 120 --to 120 --query "open=picker&lang=ja"
 //   node tools/frames.mjs --list            (デモの状態の一覧)
 //
 // frames=N の固定刻み(1/60 秒)で N フレーム進めて止まった絵を、N ごとに撮る。同じ入力なら
@@ -27,13 +28,14 @@ if (args.list) {
   process.exit(0);
 }
 
+const PAGE = args.page === 'desk' ? 'desk' : 'stage';
 const STATE = String(args.state || 'calm');
 const FROM = Number(args.from ?? 0);
 const TO = Number(args.to ?? 120);
 const STEP = Math.max(1, Number(args.step ?? 4));
 const [W, H] = String(args.size || '1180x670').split('x').map(Number);
 const SEED = Number(args.seed || 341);
-const OUT = path.resolve(String(args.out || path.join(process.env.KIROCREW_SCRATCH || os.tmpdir(), 'stira-frames', `${STATE}-${W}x${H}`)));
+const OUT = path.resolve(String(args.out || path.join(process.env.KIROCREW_SCRATCH || os.tmpdir(), 'stira-frames', `${PAGE}-${STATE}-${W}x${H}`)));
 const EXTRA = typeof args.query === 'string' ? `&${args.query}` : '';
 
 const CHROME = [process.env.CHROME, 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', '/usr/bin/google-chrome', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome']
@@ -103,9 +105,9 @@ async function evaluate(expression) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 fs.mkdirSync(OUT, { recursive: true });
-const report = { state: STATE, size: [W, H], seed: SEED, step: STEP, chrome: path.basename(CHROME), frames: [] };
+const report = { page: PAGE, state: STATE, size: [W, H], seed: SEED, step: STEP, chrome: path.basename(CHROME), frames: [] };
 for (let n = Math.max(1, FROM); n <= TO; n += STEP) {
-  const url = `http://127.0.0.1:${PORT}/tools/harness/stage.html?state=${encodeURIComponent(STATE)}&frames=${n}&seed=${SEED}&instant=1${EXTRA}`;
+  const url = `http://127.0.0.1:${PORT}/tools/harness/${PAGE}.html?state=${encodeURIComponent(STATE)}&frames=${n}&seed=${SEED}&instant=1${EXTRA}`;
   await S('Page.navigate', { url });
   let info = null;
   for (let t = 0; t < 400; t += 1) {
@@ -113,6 +115,7 @@ for (let n = Math.max(1, FROM); n <= TO; n += STEP) {
     try {
       info = await evaluate(`(() => { const r = window.__stira && window.__stira.root; if (!r) return null;
         const d = r.dataset; if (d.ready === 'error') return { error: true };
+        if (${JSON.stringify(PAGE)} === 'desk' && d.harnessReady !== '1') return null;
         if (d.frozen !== '1') return null;
         const c = r.querySelector('#view').getBoundingClientRect(); const s = r.querySelector('#stage').getBoundingClientRect();
         return { frame: d.charFrame || '', face: d.charFace || '', step: d.step || '', render: d.render || '', layout: r.stiraLayout || null,
@@ -127,7 +130,7 @@ for (let n = Math.max(1, FROM); n <= TO; n += STEP) {
     console.error(`frame ${n}: ${info ? 'load error' : 'timeout'}`);
     continue;
   }
-  const [x, y, w, h] = info.view;
+  const [x, y, w, h] = PAGE === 'desk' ? info.stage : info.view;
   const shot = await S('Page.captureScreenshot', { format: 'png', clip: { x, y, width: w, height: h, scale: 1 } });
   const name = `f${String(n).padStart(4, '0')}.png`;
   fs.writeFileSync(path.join(OUT, name), Buffer.from(shot.data, 'base64'));
